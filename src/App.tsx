@@ -166,7 +166,7 @@ function Catalog() {
           href="/"
           aria-label={`${brand} Boutique, inicio`}
         >
-          {brand.toLowerCase()}
+          {brand}
           <span>BOUTIQUE</span>
         </a>
         <nav aria-label="Navegación principal">
