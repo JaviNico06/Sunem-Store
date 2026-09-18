@@ -30,7 +30,7 @@ export default function App() {
     return (
       <main className="setup">
         <div className="wordmark">
-          {brand.toLowerCase()}
+          {brand)}
           <span>BOUTIQUE</span>
         </div>
         <h1>Tu boutique está casi lista.</h1>
