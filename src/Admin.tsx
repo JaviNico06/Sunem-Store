@@ -159,7 +159,7 @@ function Login() {
     <main className="login-page">
       <section className="login-art">
         <div className="wordmark">
-          {brand.toLowerCase()}
+          {brand}
           <span>BOUTIQUE</span>
         </div>
         <h1>
@@ -170,7 +170,7 @@ function Login() {
           <em>a tu boutique.</em>
         </h1>
         <p>Tu colección, en un solo lugar.</p>
-        <span className="login-flower">✳</span>
+        <span className="login-flower">*</span>
       </section>
       <section className="login-form">
         <p className="eyebrow">ESPACIO PRIVADO</p>
@@ -335,7 +335,7 @@ function Workspace({ email }: { email: string }) {
     <div className="admin-shell">
       <aside className={menu ? "sidebar open" : "sidebar"}>
         <a className="wordmark" href="/">
-          {brand.toLowerCase()}
+          {brand}
           <span>BOUTIQUE</span>
         </a>
         <p className="sidebar-label">MI BOUTIQUE</p>
