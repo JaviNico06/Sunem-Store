@@ -191,7 +191,7 @@ function Catalog() {
           </div>
           <div className="intro-aside">
             <span className="asterisk" aria-hidden="true">
-              ✳
+              *
             </span>
             <p>
               Ropa, joyería y aromas.
@@ -376,7 +376,7 @@ function Catalog() {
       </main>
       <footer className="site-footer">
         <div className="wordmark">
-          {brand.toLowerCase()}
+          {brand}
           <span>BOUTIQUE</span>
         </div>
         <p>Detalles que hablan de ti.</p>
