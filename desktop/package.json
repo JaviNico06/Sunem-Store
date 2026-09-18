@@ -1,0 +1,48 @@
+{
+  "name": "duna-boutique-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Panel privado de Duna Boutique",
+  "author": "Duna Boutique",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "mx.duna.boutique",
+    "productName": "Duna Boutique",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "url-policy.cjs",
+      "config.json",
+      "offline.html",
+      "icon.ico"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Duna-Boutique-${version}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Duna-Boutique-${version}-portable.exe"
+    }
+  }
+}

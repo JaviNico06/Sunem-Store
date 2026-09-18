@@ -1,0 +1,36 @@
+name: Generar aplicación Windows
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: "URL HTTPS de tu catálogo Vercel (sin /admin)"
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Configurar URL de forma segura
+        env:
+          DUNA_SITE_URL: ${{ inputs.site_url }}
+        run: node -e "const fs=require('fs'); const {validateSiteUrl}=require('./url-policy.cjs'); fs.writeFileSync('config.json',JSON.stringify({siteUrl:validateSiteUrl(process.env.DUNA_SITE_URL)}));"
+      - run: npm ci
+      - run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Duna-Boutique-Windows
+          path: desktop/release/*.exe
+          retention-days: 14
