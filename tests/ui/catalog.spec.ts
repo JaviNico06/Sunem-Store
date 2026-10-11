@@ -3,6 +3,7 @@ test("Catálogo filtra, abre detalle y funciona en móvil", async ({ page }) => 
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
+  await expect(page.locator(".promotion-panel")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Ver Blusa Alba", exact: true }),
   ).toBeVisible();
@@ -30,6 +31,18 @@ test("Catálogo filtra, abre detalle y funciona en móvil", async ({ page }) => 
     ),
   ).toBeTruthy();
   expect(errors).toEqual([]);
+});
+
+test("Publicidad rota desaparece sin dejar columna vacía", async ({ page }) => {
+  await page.route("**/demo/blouse.png", (route) => route.abort());
+  await page.route("**/demo/earrings.png", (route) => route.abort());
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?promotions");
+  await expect(page.locator(".promotion-panel:visible")).toHaveCount(1);
+  await expect(page.locator(".catalog-layout")).toHaveClass(/promotion-right-only/);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+  ).toBeTruthy();
 });
 test("Panel crea, edita, sube foto y registra inventario", async ({ page }) => {
   await page.goto("/admin");
@@ -69,4 +82,59 @@ test("Panel crea, edita, sube foto y registra inventario", async ({ page }) => {
   await expect(page.getByText("1 piezas", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Movimientos", exact: true }).click();
   await expect(page.getByText("Venta de prueba")).toBeVisible();
+});
+
+test("Panel administra promociones y valida imágenes", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Panel izquierdo" }).click();
+  await page.getByLabel("Nombre interno de la promoción").fill("Temporada nueva");
+  await page
+    .getByLabel("Texto alternativo para accesibilidad")
+    .fill("Modelo con prendas de la temporada nueva");
+  await page
+    .getByLabel("Subir imagen vertical")
+    .setInputFiles("public/demo/blouse.png");
+  await page
+    .getByLabel("Subir imagen horizontal")
+    .setInputFiles("public/demo/earrings.png");
+  await expect(page.getByText(/se recomiendan 600 × 1800 px/)).toBeVisible();
+  await expect(page.getByText(/se recomiendan 1200 × 600 px/)).toBeVisible();
+  await page.getByLabel("Mostrar esta promoción").check();
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(
+    page.getByText("Promoción guardada en la demostración temporal."),
+  ).toBeVisible();
+  await expect(page.locator(".promotion-preview img")).toHaveCount(2);
+});
+
+test("Publicidad conserva proporción y no desborda en tamaños objetivo", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/?promotions");
+  for (const width of [360, 390, 768, 1024, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(page.locator(".promotion-panel:visible")).toHaveCount(2);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+      `desbordamiento a ${width}px`,
+    ).toBeTruthy();
+    const objectFits = await page
+      .locator(".promotion-panel:visible img")
+      .evaluateAll((images) =>
+        images.map((image) => getComputedStyle(image).objectFit),
+      );
+    expect(objectFits).toEqual(["contain", "contain"]);
+    if (width >= 1280) {
+      await expect(page.locator(".promotion-desktop:visible")).toHaveCount(2);
+      await expect(page.locator(".promotion-inline:visible")).toHaveCount(0);
+    } else {
+      await expect(page.locator(".promotion-inline:visible")).toHaveCount(2);
+      await expect(page.locator(".promotion-desktop:visible")).toHaveCount(0);
+    }
+  }
+  expect(errors).toEqual([]);
 });

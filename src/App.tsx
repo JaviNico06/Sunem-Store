@@ -7,7 +7,15 @@ import {
   Check,
   X,
 } from "lucide-react";
-import { brand, isDemo, configured, db, listProducts, errorText } from "./api";
+import {
+  brand,
+  isDemo,
+  configured,
+  db,
+  listProducts,
+  listPromotions,
+  errorText,
+} from "./api";
 import {
   categories,
   genders,
@@ -18,6 +26,8 @@ import {
   totalStock,
   variantLabel,
   type Product,
+  type Promotion,
+  type PromotionSlot,
 } from "./types";
 import { Modal, Notice, ProductImage } from "./ui";
 const Admin = lazy(() => import("./Admin"));
@@ -65,6 +75,10 @@ export default function App() {
 }
 function Catalog() {
   const [products, setProducts] = useState<Product[]>([]),
+    [promotions, setPromotions] = useState<Promotion[]>([]),
+    [failedPromotionSlots, setFailedPromotionSlots] = useState<
+      Set<PromotionSlot>
+    >(new Set()),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [search, setSearch] = useState(""),
@@ -76,7 +90,19 @@ function Catalog() {
     [filters, setFilters] = useState(false);
   const refresh = useCallback(async () => {
     try {
-      setProducts(await listProducts());
+      const [productResult, promotionResult] = await Promise.allSettled([
+        listProducts(),
+        listPromotions(),
+      ]);
+      if (productResult.status === "rejected") throw productResult.reason;
+      setProducts(productResult.value);
+      if (promotionResult.status === "fulfilled") {
+        setPromotions(promotionResult.value);
+        setFailedPromotionSlots(new Set());
+      } else {
+        setPromotions([]);
+        console.warn("No se pudieron cargar las promociones.", promotionResult.reason);
+      }
       setError("");
     } catch (e) {
       setError(errorText(e));
@@ -157,6 +183,27 @@ function Catalog() {
     setAvailable(false);
     setSort("new");
   };
+  const leftPromotion = promotions.find(
+    (promotion) =>
+      promotion.slot === "left" &&
+      promotion.vertical_url &&
+      !failedPromotionSlots.has("left"),
+  );
+  const rightPromotion = promotions.find(
+    (promotion) =>
+      promotion.slot === "right" &&
+      promotion.vertical_url &&
+      !failedPromotionSlots.has("right"),
+  );
+  const promotionUnavailable = (slot: PromotionSlot) =>
+    setFailedPromotionSlots((current) => new Set(current).add(slot));
+  const promotionClass = leftPromotion && rightPromotion
+    ? "promotions-both"
+    : leftPromotion
+      ? "promotion-left-only"
+      : rightPromotion
+        ? "promotion-right-only"
+        : "no-promotions";
   return (
     <div className="catalog">
       <div className="announcement">Pequeños detalles. Mucho de ti.</div>
@@ -179,8 +226,17 @@ function Catalog() {
           Una selección para ti <span>✧</span>
         </span>
       </header>
-      <main>
-        <section className="collection-intro">
+      <main className={`catalog-layout ${promotionClass}`}>
+        {leftPromotion && (
+          <PromotionPanel
+            key={`desktop-${leftPromotion.vertical_path}`}
+            promotion={leftPromotion}
+            placement="desktop"
+            onUnavailable={promotionUnavailable}
+          />
+        )}
+        <div className="catalog-center">
+          <section className="collection-intro">
           <div>
             <p className="eyebrow">EL ARTE DE ELEGIR LO QUE TE GUSTA</p>
             <h1>
@@ -204,8 +260,28 @@ function Catalog() {
               Explorar colección <ArrowDown />
             </a>
           </div>
-        </section>
-        <section
+          </section>
+          {(leftPromotion || rightPromotion) && (
+            <div className="inline-promotions" aria-label="Promociones">
+              {leftPromotion && (
+                <PromotionPanel
+                  key={`inline-${leftPromotion.vertical_path}-${leftPromotion.horizontal_path}`}
+                  promotion={leftPromotion}
+                  placement="inline"
+                  onUnavailable={promotionUnavailable}
+                />
+              )}
+              {rightPromotion && (
+                <PromotionPanel
+                  key={`inline-${rightPromotion.vertical_path}-${rightPromotion.horizontal_path}`}
+                  promotion={rightPromotion}
+                  placement="inline"
+                  onUnavailable={promotionUnavailable}
+                />
+              )}
+            </div>
+          )}
+          <section
           id="coleccion"
           className="collection"
           aria-label="Catálogo de productos"
@@ -372,7 +448,16 @@ function Catalog() {
               )}
             </div>
           )}
-        </section>
+          </section>
+        </div>
+        {rightPromotion && (
+          <PromotionPanel
+            key={`desktop-${rightPromotion.vertical_path}`}
+            promotion={rightPromotion}
+            placement="desktop"
+            onUnavailable={promotionUnavailable}
+          />
+        )}
       </main>
       <footer className="site-footer">
         <div className="wordmark">
@@ -394,6 +479,46 @@ function Catalog() {
         />
       )}
     </div>
+  );
+}
+function PromotionPanel({
+  promotion,
+  placement,
+  onUnavailable,
+}: {
+  promotion: Promotion;
+  placement: "desktop" | "inline";
+  onUnavailable: (slot: PromotionSlot) => void;
+}) {
+  const [useVerticalFallback, setUseVerticalFallback] = useState(false);
+  const source =
+    placement === "inline" && !useVerticalFallback
+      ? promotion.horizontal_url || promotion.vertical_url
+      : promotion.vertical_url;
+  if (!source) return null;
+  return (
+    <aside
+      className={`promotion-panel promotion-${promotion.slot} promotion-${placement}`}
+      aria-label={`Publicidad ${promotion.slot === "left" ? "izquierda" : "derecha"}`}
+    >
+      <img
+        src={source}
+        alt={promotion.alt_text}
+        onError={() => {
+          if (
+            placement === "inline" &&
+            !useVerticalFallback &&
+            promotion.horizontal_url &&
+            promotion.vertical_url &&
+            promotion.horizontal_url !== promotion.vertical_url
+          ) {
+            setUseVerticalFallback(true);
+          } else {
+            onUnavailable(promotion.slot);
+          }
+        }}
+      />
+    </aside>
   );
 }
 function ArrowDown() {

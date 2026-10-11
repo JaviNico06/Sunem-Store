@@ -219,10 +219,38 @@ small {
   color: var(--plum);
   font-size: 1.5rem;
 }
-.catalog main {
+.catalog-layout {
   max-width: 1440px;
   padding: 0 5.6%;
   margin: auto;
+}
+.catalog-center {
+  min-width: 0;
+}
+.promotion-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f1ebe5;
+}
+.promotion-panel img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.promotion-desktop {
+  display: none;
+}
+.inline-promotions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  margin: 0 0 34px;
+}
+.promotion-inline {
+  aspect-ratio: 2 / 1;
 }
 .collection-intro {
   display: flex;
@@ -1133,6 +1161,88 @@ td {
   text-align: center;
   margin: 22px 0 0;
 }
+.promotion-form-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fffdf9;
+  padding: 26px;
+}
+.promotion-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+}
+.promotion-image-field {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbf7f2;
+  padding: 18px;
+}
+.promotion-image-field .section-heading {
+  margin: 0 0 15px;
+}
+.promotion-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 330px;
+  overflow: hidden;
+  border: 1px solid #e2d8d0;
+  border-radius: 5px;
+  background: #eee7df;
+}
+.promotion-preview.horizontal {
+  height: auto;
+  aspect-ratio: 2 / 1;
+}
+.promotion-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.promotion-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.promotion-upload {
+  margin-top: 16px;
+}
+.promotion-upload input {
+  background: #fffdf9;
+  font-size: 0.8125rem;
+}
+.canva-size,
+.mobile-recommendation {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.mobile-recommendation {
+  color: #78586a;
+}
+.promotion-image-field > .notice {
+  margin: 13px 0 0;
+}
+.promotion-image-field > .danger {
+  margin-top: 13px;
+  color: #9b4d49;
+}
+.promotion-revision {
+  margin-right: auto;
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .positive {
   color: var(--green);
 }
@@ -1285,6 +1395,44 @@ td {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+@media (min-width: 1280px) {
+  .catalog-layout.promotions-both,
+  .catalog-layout.promotion-left-only,
+  .catalog-layout.promotion-right-only {
+    max-width: 1920px;
+    display: grid;
+    gap: clamp(20px, 2vw, 36px);
+    padding: 0 clamp(24px, 3vw, 64px);
+    align-items: start;
+  }
+  .catalog-layout.promotions-both {
+    grid-template-columns:
+      clamp(160px, 12vw, 220px) minmax(0, 1fr)
+      clamp(160px, 12vw, 220px);
+  }
+  .catalog-layout.promotion-left-only {
+    grid-template-columns: clamp(160px, 12vw, 220px) minmax(0, 1fr);
+  }
+  .catalog-layout.promotion-right-only {
+    grid-template-columns: minmax(0, 1fr) clamp(160px, 12vw, 220px);
+  }
+  .promotion-desktop {
+    display: block;
+    aspect-ratio: 1 / 3;
+    margin-top: 52px;
+  }
+  .inline-promotions {
+    display: none;
+  }
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  .inline-promotions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .inline-promotions > :only-child {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 1150px) {
   .sidebar {
     width: 210px;
@@ -1329,7 +1477,7 @@ td {
     gap: 22px;
     font-size: 0.8125rem;
   }
-  .catalog main {
+  .catalog-layout {
     padding: 0 5%;
   }
   .collection-intro {
@@ -1621,6 +1769,24 @@ td {
   }
   .photo-editor {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .promotion-form-card {
+    padding: 15px;
+  }
+  .promotion-images {
+    grid-template-columns: 1fr;
+  }
+  .promotion-preview {
+    height: 300px;
+  }
+  .promotion-preview.horizontal {
+    height: auto;
+  }
+  .promotion-editor .form-footer {
+    flex-wrap: wrap;
+  }
+  .promotion-editor .form-footer .primary {
+    width: 100%;
   }
   .login-page {
     grid-template-columns: 1fr;

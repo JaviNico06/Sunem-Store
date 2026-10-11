@@ -47,6 +47,19 @@ export interface Movement {
   created_at: string;
   request_id: string;
 }
+export type PromotionSlot = "left" | "right";
+export interface Promotion {
+  slot: PromotionSlot;
+  name: string;
+  alt_text: string;
+  vertical_path: string | null;
+  horizontal_path: string | null;
+  active: boolean;
+  revision: number;
+  updated_at: string;
+  vertical_url?: string;
+  horizontal_url?: string;
+}
 export const money = (value: number) =>
   new Intl.NumberFormat("es-MX", {
     style: "currency",

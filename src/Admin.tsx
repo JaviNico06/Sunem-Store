@@ -23,6 +23,8 @@ import {
   Cloud,
   Menu,
   Check,
+  PanelLeft,
+  PanelRight,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import {
@@ -38,11 +40,17 @@ import {
   uploadPhoto,
   removePhoto,
   coverPhoto,
+  listPromotions,
+  uploadPromotionImage,
+  savePromotion,
+  removePromotionImages,
 } from "./api";
 import {
   type Product,
   type Variant,
   type Movement,
+  type Promotion,
+  type PromotionSlot,
   categories,
   genders,
   freshProduct,
@@ -53,6 +61,11 @@ import {
   variantLabel,
 } from "./types";
 import { Modal, Notice, ProductImage } from "./ui";
+import {
+  dimensionsNotice,
+  inspectImageFile,
+  type ImageInfo,
+} from "./image";
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null),
     [authReady, setAuthReady] = useState(isDemo),
@@ -273,6 +286,7 @@ function PasswordChange({ onDone }: { onDone: () => void }) {
 }
 function Workspace({ email }: { email: string }) {
   const [products, setProducts] = useState<Product[]>([]),
+    [promotions, setPromotions] = useState<Promotion[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [success, setSuccess] = useState(""),
@@ -287,9 +301,14 @@ function Workspace({ email }: { email: string }) {
     [lastSync, setLastSync] = useState("");
   const refresh = useCallback(async () => {
     try {
-      const [p, m] = await Promise.all([listProducts(true), history()]);
+      const [p, m, promotions] = await Promise.all([
+        listProducts(true),
+        history(),
+        listPromotions(true),
+      ]);
       setProducts(p);
       setLogs(m);
+      setPromotions(promotions);
       setLastSync(
         new Date().toLocaleTimeString("es-MX", {
           hour: "2-digit",
@@ -331,6 +350,26 @@ function Workspace({ email }: { email: string }) {
     );
     await refresh();
   }
+  const promotionSlot: PromotionSlot | null =
+    view === "promotion-left"
+      ? "left"
+      : view === "promotion-right"
+        ? "right"
+        : null;
+  const viewTitle =
+    view === "products"
+      ? "Tu colección"
+      : view === "history"
+        ? "Movimientos"
+        : promotionSlot === "left"
+          ? "Panel izquierdo"
+          : "Panel derecho";
+  const viewDescription =
+    view === "products"
+      ? "Un espacio para todas tus piezas especiales."
+      : view === "history"
+        ? "Entradas y salidas de tu inventario."
+        : "Configura la publicidad que aparecerá en el catálogo.";
   return (
     <div className="admin-shell">
       <aside className={menu ? "sidebar open" : "sidebar"}>
@@ -364,6 +403,26 @@ function Workspace({ email }: { email: string }) {
             <ExternalLink size={19} />
             Ver catálogo
           </a>
+          <button
+            className={view === "promotion-left" ? "active" : ""}
+            onClick={() => {
+              setView("promotion-left");
+              setMenu(false);
+            }}
+          >
+            <PanelLeft size={19} />
+            Panel izquierdo
+          </button>
+          <button
+            className={view === "promotion-right" ? "active" : ""}
+            onClick={() => {
+              setView("promotion-right");
+              setMenu(false);
+            }}
+          >
+            <PanelRight size={19} />
+            Panel derecho
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="cloud-note">
@@ -409,9 +468,7 @@ function Workspace({ email }: { email: string }) {
           </button>
           <span>
             Mi boutique{" "}
-            <span className="breadcrumb">
-              / {view === "products" ? "Productos" : "Movimientos"}
-            </span>
+            <span className="breadcrumb">/ {viewTitle}</span>
           </span>
           <button className="text-button" onClick={() => void refresh()}>
             <RefreshCw size={15} />
@@ -422,20 +479,18 @@ function Workspace({ email }: { email: string }) {
           <div className="admin-title">
             <div>
               <p className="eyebrow">CADA DETALLE CUENTA</p>
-              <h1>{view === "products" ? "Tu colección" : "Movimientos"}</h1>
-              <p className="muted">
-                {view === "products"
-                  ? "Un espacio para todas tus piezas especiales."
-                  : "Entradas y salidas de tu inventario."}
-              </p>
+              <h1>{viewTitle}</h1>
+              <p className="muted">{viewDescription}</p>
             </div>
-            <button
-              className="primary"
-              onClick={() => setEditor(freshProduct())}
-            >
-              <Plus size={18} />
-              Agregar producto
-            </button>
+            {view === "products" && (
+              <button
+                className="primary"
+                onClick={() => setEditor(freshProduct())}
+              >
+                <Plus size={18} />
+                Agregar producto
+              </button>
+            )}
           </div>
           {error && <Notice error>{error}</Notice>}
           {success && (
@@ -446,7 +501,7 @@ function Workspace({ email }: { email: string }) {
               </button>
             </Notice>
           )}
-          <div className="stats">
+          {view === "products" && <div className="stats">
             <div>
               <span>Productos</span>
               <strong>
@@ -472,7 +527,7 @@ function Workspace({ email }: { email: string }) {
               </strong>
               <small>Productos por reponer</small>
             </div>
-          </div>
+          </div>}
           {view === "products" ? (
             <section className="inventory-panel">
               <div className="inventory-tools">
@@ -610,7 +665,7 @@ function Workspace({ email }: { email: string }) {
                 los ceros iniciales.
               </div>
             </section>
-          ) : (
+          ) : view === "history" ? (
             <section className="inventory-panel">
               <div className="panel-heading">
                 <h2>Últimos 100 movimientos</h2>
@@ -660,7 +715,27 @@ function Workspace({ email }: { email: string }) {
                 </div>
               )}
             </section>
-          )}
+          ) : promotionSlot ? (
+            promotions.find((promotion) => promotion.slot === promotionSlot) ? (
+              <PromotionEditor
+                key={`${promotionSlot}-${promotions.find((promotion) => promotion.slot === promotionSlot)!.revision}`}
+                initial={promotions.find((promotion) => promotion.slot === promotionSlot)!}
+                onSaved={async () => {
+                  setSuccess(
+                    isDemo
+                      ? "Promoción guardada en la demostración temporal."
+                      : "Promoción guardada en la nube.",
+                  );
+                  await refresh();
+                }}
+              />
+            ) : (
+              <div className="empty">
+                <h2>{loading ? "Cargando promoción…" : "Panel no disponible"}</h2>
+                <p>Actualiza la página o verifica que la migración esté aplicada.</p>
+              </div>
+            )
+          ) : null}
           <p className="admin-footnote">
             {isDemo
               ? "Esta muestra no guarda datos al cerrar o recargar."
@@ -689,6 +764,310 @@ function Workspace({ email }: { email: string }) {
     </div>
   );
 }
+interface SelectedPromotionImage {
+  file: File;
+  info: ImageInfo;
+  url: string;
+  warning: string;
+}
+
+function PromotionEditor({
+  initial,
+  onSaved,
+}: {
+  initial: Promotion;
+  onSaved: () => Promise<void>;
+}) {
+  const [promotion, setPromotion] = useState(() => structuredClone(initial));
+  const [verticalFile, setVerticalFile] =
+    useState<SelectedPromotionImage | null>(null);
+  const [horizontalFile, setHorizontalFile] =
+    useState<SelectedPromotionImage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(
+    () => () => {
+      if (verticalFile) URL.revokeObjectURL(verticalFile.url);
+    },
+    [verticalFile],
+  );
+  useEffect(
+    () => () => {
+      if (horizontalFile) URL.revokeObjectURL(horizontalFile.url);
+    },
+    [horizontalFile],
+  );
+
+  async function chooseImage(
+    kind: "vertical" | "horizontal",
+    file: File | undefined,
+  ) {
+    if (!file) return;
+    setError("");
+    try {
+      const info = await inspectImageFile(file);
+      const selected = {
+        file,
+        info,
+        url: URL.createObjectURL(file),
+        warning:
+          kind === "vertical"
+            ? dimensionsNotice(info, 600, 1800)
+            : dimensionsNotice(info, 1200, 600),
+      };
+      if (kind === "vertical") setVerticalFile(selected);
+      else setHorizontalFile(selected);
+    } catch (cause) {
+      setError(errorText(cause));
+    }
+  }
+
+  function removeImage(kind: "vertical" | "horizontal") {
+    const label = kind === "vertical" ? "vertical" : "horizontal";
+    if (!confirm(`¿Eliminar la imagen ${label}? El cambio se aplicará al guardar.`))
+      return;
+    if (kind === "vertical") {
+      setVerticalFile(null);
+      setPromotion((current) => ({
+        ...current,
+        vertical_path: null,
+        vertical_url: undefined,
+        active: false,
+      }));
+    } else {
+      setHorizontalFile(null);
+      setPromotion((current) => ({
+        ...current,
+        horizontal_path: null,
+        horizontal_url: undefined,
+      }));
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const uploadedPaths: string[] = [];
+    let committed = false;
+    try {
+      const hasVertical = Boolean(verticalFile || promotion.vertical_path);
+      if (promotion.active && !hasVertical)
+        throw new Error("Agrega una imagen vertical antes de activar el panel.");
+      if (promotion.active && !promotion.alt_text.trim())
+        throw new Error("Agrega texto alternativo antes de activar el panel.");
+
+      const next = structuredClone(promotion);
+      if (verticalFile) {
+        const uploaded = await uploadPromotionImage(
+          promotion.slot,
+          "vertical",
+          verticalFile.file,
+        );
+        uploadedPaths.push(uploaded.path);
+        next.vertical_path = uploaded.path;
+        next.vertical_url = uploaded.url;
+      }
+      if (horizontalFile) {
+        const uploaded = await uploadPromotionImage(
+          promotion.slot,
+          "horizontal",
+          horizontalFile.file,
+        );
+        uploadedPaths.push(uploaded.path);
+        next.horizontal_path = uploaded.path;
+        next.horizontal_url = uploaded.url;
+      }
+
+      await savePromotion(next);
+      committed = true;
+      const obsoletePaths = [initial.vertical_path, initial.horizontal_path].filter(
+        (path): path is string =>
+          Boolean(path) && path !== next.vertical_path && path !== next.horizontal_path,
+      );
+      try {
+        await removePromotionImages(obsoletePaths);
+      } catch (cleanupError) {
+        console.warn("La promoción se guardó, pero quedó un archivo por limpiar.", cleanupError);
+      }
+      await onSaved();
+    } catch (cause) {
+      if (!committed) {
+        try {
+          await removePromotionImages(uploadedPaths);
+        } catch (cleanupError) {
+          console.warn("No se pudo revertir una carga incompleta.", cleanupError);
+        }
+      }
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const verticalPreview = verticalFile?.url || promotion.vertical_url;
+  const horizontalPreview = horizontalFile?.url || promotion.horizontal_url;
+  const side = promotion.slot === "left" ? "izquierdo" : "derecho";
+
+  return (
+    <form className="promotion-editor" onSubmit={submit}>
+      <fieldset disabled={busy} className="editor-fieldset">
+        <section className="promotion-form-card">
+          <div className="form-grid">
+            <label>
+              Nombre interno de la promoción
+              <input
+                required
+                maxLength={160}
+                value={promotion.name}
+                onChange={(event) =>
+                  setPromotion((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder={`Ej. Campaña de otoño — panel ${side}`}
+              />
+            </label>
+            <label>
+              Texto alternativo para accesibilidad
+              <input
+                required={promotion.active}
+                maxLength={500}
+                value={promotion.alt_text}
+                onChange={(event) =>
+                  setPromotion((current) => ({
+                    ...current,
+                    alt_text: event.target.value,
+                  }))
+                }
+                placeholder="Describe brevemente el contenido del anuncio"
+              />
+            </label>
+          </div>
+
+          <div className="promotion-images">
+            <PromotionImageField
+              kind="vertical"
+              preview={verticalPreview}
+              alt={promotion.alt_text}
+              warning={verticalFile?.warning || ""}
+              onChoose={(file) => void chooseImage("vertical", file)}
+              onRemove={() => removeImage("vertical")}
+            />
+            <PromotionImageField
+              kind="horizontal"
+              preview={horizontalPreview}
+              alt={promotion.alt_text}
+              warning={horizontalFile?.warning || ""}
+              onChoose={(file) => void chooseImage("horizontal", file)}
+              onRemove={() => removeImage("horizontal")}
+            />
+          </div>
+
+          <label className="publish-switch">
+            <input
+              type="checkbox"
+              checked={promotion.active}
+              onChange={(event) =>
+                setPromotion((current) => ({
+                  ...current,
+                  active: event.target.checked,
+                }))
+              }
+            />
+            <span>
+              <strong>Mostrar esta promoción</strong>
+              <small>
+                El panel solo aparecerá si está activo y tiene una imagen vertical válida.
+              </small>
+            </span>
+          </label>
+
+          {error && <Notice error>{error}</Notice>}
+          <footer className="form-footer">
+            <span className="promotion-revision">
+              Versión {promotion.revision} · Los cambios se validan contra otras sesiones.
+            </span>
+            <button className="primary" type="submit" disabled={busy}>
+              <Check size={17} />
+              {busy ? "Guardando en la nube…" : "Guardar cambios"}
+            </button>
+          </footer>
+        </section>
+      </fieldset>
+    </form>
+  );
+}
+
+function PromotionImageField({
+  kind,
+  preview,
+  alt,
+  warning,
+  onChoose,
+  onRemove,
+}: {
+  kind: "vertical" | "horizontal";
+  preview?: string;
+  alt: string;
+  warning: string;
+  onChoose: (file: File | undefined) => void;
+  onRemove: () => void;
+}) {
+  const vertical = kind === "vertical";
+  return (
+    <section className="promotion-image-field">
+      <div className="section-heading">
+        <div>
+          <h3>Imagen {vertical ? "vertical" : "horizontal"}</h3>
+          <p>{vertical ? "Obligatoria para activar" : "Opcional, recomendada para móvil"}</p>
+        </div>
+      </div>
+      <div className={`promotion-preview ${vertical ? "vertical" : "horizontal"}`}>
+        {preview ? (
+          <img src={preview} alt={alt || "Vista previa de la promoción"} />
+        ) : (
+          <div className="promotion-preview-empty">
+            <ImagePlus size={26} />
+            <span>Sin imagen</span>
+          </div>
+        )}
+      </div>
+      <label className="promotion-upload">
+        Subir o reemplazar imagen {vertical ? "vertical" : "horizontal"}
+        <input
+          aria-label={`Subir imagen ${vertical ? "vertical" : "horizontal"}`}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(event) => {
+            onChoose(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+      </label>
+      <small className="canva-size">
+        Canva: {vertical ? "600 × 1800 px (1:3)" : "1200 × 600 px (2:1)"} · JPG,
+        PNG o WebP · Máximo 5 MB
+      </small>
+      {!vertical && (
+        <small className="mobile-recommendation">
+          Recomendamos cargar esta versión para una mejor presentación en celulares y tablets.
+        </small>
+      )}
+      {warning && <Notice>{warning}</Notice>}
+      {preview && (
+        <button type="button" className="text-button danger" onClick={onRemove}>
+          <Trash2 size={15} />
+          Eliminar imagen
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Editor({
   initial,
   onClose,

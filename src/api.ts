@@ -1,6 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { demoProducts } from "./demo";
-import type { Product, Movement, Photo } from "./types";
+import type {
+  Product,
+  Movement,
+  Photo,
+  Promotion,
+  PromotionSlot,
+} from "./types";
+import { imageExtension, inspectImageFile } from "./image";
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const isDemo = import.meta.env.VITE_DEMO_MODE === "true";
@@ -9,6 +16,34 @@ export const db = !isDemo && configured ? createClient(url, key) : null;
 export const brand = import.meta.env.VITE_BRAND_NAME || "Duna";
 let demo: Product[] = demoProducts();
 let movements: Movement[] = [];
+const demoPromotionPreview =
+  isDemo && new URLSearchParams(location.search).has("promotions");
+let demoPromotions: Promotion[] = [
+  {
+    slot: "left",
+    name: demoPromotionPreview ? "Promoción izquierda de muestra" : "",
+    alt_text: demoPromotionPreview ? "Promoción de muestra izquierda" : "",
+    vertical_path: demoPromotionPreview ? "left/vertical-demo.png" : null,
+    horizontal_path: demoPromotionPreview ? "left/horizontal-demo.png" : null,
+    active: demoPromotionPreview,
+    revision: 1,
+    updated_at: new Date().toISOString(),
+    vertical_url: demoPromotionPreview ? "/demo/blouse.png" : undefined,
+    horizontal_url: demoPromotionPreview ? "/demo/earrings.png" : undefined,
+  },
+  {
+    slot: "right",
+    name: demoPromotionPreview ? "Promoción derecha de muestra" : "",
+    alt_text: demoPromotionPreview ? "Promoción de muestra derecha" : "",
+    vertical_path: demoPromotionPreview ? "right/vertical-demo.png" : null,
+    horizontal_path: demoPromotionPreview ? "right/horizontal-demo.png" : null,
+    active: demoPromotionPreview,
+    revision: 1,
+    updated_at: new Date().toISOString(),
+    vertical_url: demoPromotionPreview ? "/demo/perfume.png" : undefined,
+    horizontal_url: demoPromotionPreview ? "/demo/blouse.png" : undefined,
+  },
+];
 // La demo vive en memoria: nunca se confunde con guardado en la nube.
 const clone = <T>(v: T): T => structuredClone(v);
 function client() {
@@ -167,13 +202,8 @@ export async function uploadPhoto(
   file: File,
   position: number,
 ): Promise<Photo> {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
-    throw new Error("Usa una imagen JPG, PNG o WebP.");
-  if (file.size > 5 * 1024 * 1024)
-    throw new Error("Cada foto debe pesar como máximo 5 MB.");
-  const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[
-    file.type
-  ];
+  await inspectImageFile(file);
+  const ext = imageExtension(file);
   const path = `${productId}/${crypto.randomUUID()}.${ext}`;
   if (isDemo) {
     const url = await new Promise<string>((resolve, reject) => {
@@ -213,13 +243,15 @@ export async function removePhoto(photo: Photo) {
     if (p) p.photos = p.photos.filter((x) => x.id !== photo.id);
     return;
   }
-  // Primero bytes, después referencia; un error deja un elemento visible para reintentar.
+  // Primero se quita la referencia pública. Un fallo posterior solo deja un
+  // objeto huérfano privado, nunca una fotografía rota en el catálogo.
+  const { error } = await client().from("photos").delete().eq("id", photo.id);
+  if (error) throw error;
   const { error: storageError } = await client()
     .storage.from("product-photos")
     .remove([photo.path]);
-  if (storageError) throw storageError;
-  const { error } = await client().from("photos").delete().eq("id", photo.id);
-  if (error) throw error;
+  if (storageError)
+    console.warn("No se pudo limpiar el archivo de la foto eliminada.", storageError);
 }
 export async function coverPhoto(photo: Photo) {
   if (isDemo) {
@@ -232,5 +264,105 @@ export async function coverPhoto(photo: Photo) {
   const { error } = await client().rpc("set_cover_photo", {
     photo_id: photo.id,
   });
+  if (error) throw error;
+}
+
+export async function listPromotions(admin = false): Promise<Promotion[]> {
+  if (isDemo)
+    return clone(demoPromotions.filter((promotion) => admin || promotion.active));
+  const { data, error } = admin
+    ? await client().from("promotion_configs").select("*").order("slot")
+    : await client().rpc("list_active_promotions");
+  if (error) throw error;
+  const promotions = (data as Partial<Promotion>[]).map((promotion) => ({
+    name: "",
+    revision: 0,
+    updated_at: "",
+    ...promotion,
+  })) as Promotion[];
+  const paths = promotions.flatMap((promotion) =>
+    [promotion.vertical_path, promotion.horizontal_path].filter(
+      (path): path is string => Boolean(path),
+    ),
+  );
+  if (paths.length) {
+    const { data: urls, error: urlError } = await client()
+      .storage.from("promotion-images")
+      .createSignedUrls(paths, 300);
+    if (urlError) throw urlError;
+    const signed = new Map(paths.map((path, index) => [path, urls[index]?.signedUrl]));
+    promotions.forEach((promotion) => {
+      promotion.vertical_url = promotion.vertical_path
+        ? signed.get(promotion.vertical_path) || undefined
+        : undefined;
+      promotion.horizontal_url = promotion.horizontal_path
+        ? signed.get(promotion.horizontal_path) || undefined
+        : undefined;
+    });
+  }
+  return promotions;
+}
+
+async function fileDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadPromotionImage(
+  slot: PromotionSlot,
+  kind: "vertical" | "horizontal",
+  file: File,
+) {
+  await inspectImageFile(file);
+  const path = `${slot}/${kind}-${crypto.randomUUID()}.${imageExtension(file)}`;
+  if (isDemo) return { path, url: await fileDataUrl(file) };
+  const { error } = await client()
+    .storage.from("promotion-images")
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return { path };
+}
+
+export async function savePromotion(promotion: Promotion) {
+  if (isDemo) {
+    const current = demoPromotions.find((item) => item.slot === promotion.slot);
+    if (!current || current.revision !== promotion.revision)
+      throw new Error(
+        "La promoción cambió en otra sesión. Actualiza y vuelve a intentarlo.",
+      );
+    if (promotion.active && !promotion.vertical_path)
+      throw new Error("Agrega una imagen vertical antes de activar el panel.");
+    demoPromotions = demoPromotions.map((item) =>
+      item.slot === promotion.slot
+        ? {
+            ...clone(promotion),
+            revision: item.revision + 1,
+            updated_at: new Date().toISOString(),
+          }
+        : item,
+    );
+    return;
+  }
+  const { error } = await client().rpc("save_promotion", {
+    p_slot: promotion.slot,
+    p_name: promotion.name,
+    p_alt_text: promotion.alt_text,
+    p_active: promotion.active,
+    p_vertical_path: promotion.vertical_path,
+    p_horizontal_path: promotion.horizontal_path,
+    p_expected_revision: promotion.revision,
+  });
+  if (error) throw error;
+}
+
+export async function removePromotionImages(paths: string[]) {
+  if (isDemo || !paths.length) return;
+  const { error } = await client()
+    .storage.from("promotion-images")
+    .remove([...new Set(paths)]);
   if (error) throw error;
 }

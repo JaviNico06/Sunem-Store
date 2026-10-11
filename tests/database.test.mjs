@@ -25,6 +25,12 @@ await database.exec(
   ),
 );
 await database.exec(
+  await readFile(
+    new URL("../supabase/003_promotions.sql", import.meta.url),
+    "utf8",
+  ),
+);
+await database.exec(
   `insert into public.admin_users(user_id) values('${ADMIN}');`,
 );
 async function as(role, id, fn) {
@@ -251,6 +257,81 @@ await test("Portada atómica y ocultar producto quita acceso público a las foto
     assert.equal(
       (await database.query("select * from storage.objects")).rows.length,
       0,
+    );
+  });
+});
+await test("Promociones son independientes, versionadas y privadas hasta activarse", async () => {
+  await as("anon", null, async () => {
+    await assert.rejects(
+      database.query("select * from public.promotion_configs"),
+      /permission denied/,
+    );
+    assert.equal(
+      (await database.query("select * from public.list_active_promotions()"))
+        .rows.length,
+      0,
+    );
+  });
+  await as("authenticated", OTHER, async () => {
+    await assert.rejects(
+      database.query(
+        "select public.save_promotion('left','Campaña','Anuncio',true,'left/vertical-test.jpg',null,1)",
+      ),
+      /No autorizado/,
+    );
+    await assert.rejects(
+      database.exec("update public.promotion_configs set active=true"),
+      /permission denied/,
+    );
+  });
+  await database.exec(`
+    insert into storage.objects(bucket_id,name) values
+      ('promotion-images','left/vertical-test.jpg'),
+      ('promotion-images','left/horizontal-test.jpg'),
+      ('promotion-images','right/horizontal-test.jpg');
+  `);
+  await as("authenticated", ADMIN, async () => {
+    await assert.rejects(
+      database.query(
+        "select public.save_promotion('left','Campaña','Anuncio',true,null,null,1)",
+      ),
+      /imagen vertical/,
+    );
+    await assert.rejects(
+      database.query(
+        "select public.save_promotion('left','Campaña','Anuncio',true,'left/vertical-missing.jpg',null,1)",
+      ),
+      /no está disponible en la nube/,
+    );
+    await database.query(
+      "select public.save_promotion('left','Campaña','Anuncio de temporada',true,'left/vertical-test.jpg','left/horizontal-test.jpg',1)",
+    );
+  });
+  await as("anon", null, async () => {
+    const promotions = await database.query(
+      "select slot,active from public.list_active_promotions()",
+    );
+    assert.deepEqual(promotions.rows, [{ slot: "left", active: true }]);
+    assert.equal(
+      (await database.query("select * from storage.objects where bucket_id='promotion-images'"))
+        .rows.length,
+      2,
+    );
+  });
+  await as("authenticated", ADMIN, async () => {
+    await assert.rejects(
+      database.query(
+        "select public.save_promotion('left','Obsoleta','Texto',false,'left/vertical-test.jpg',null,1)",
+      ),
+      /cambió en otra sesión/,
+    );
+    await database.query(
+      "select public.save_promotion('right','Próxima campaña','',false,null,'right/horizontal-test.jpg',1)",
+    );
+    assert.equal(
+      (await database.query("select count(*)::int n from public.promotion_configs"))
+        .rows[0].n,
+      2,
     );
   });
 });
