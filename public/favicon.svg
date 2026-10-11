@@ -1,1 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#54283e"/><text x="32" y="47" text-anchor="middle" font-family="Georgia,serif" font-size="47" fill="#fffaf5">d</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="S mayúscula sobre fondo ciruela">
+  <rect width="512" height="512" rx="128" fill="#54283e"/>
+  <path d="M190 72V412L305 411Q310 241 403.5 159.5Q497 78 688 78Q866 78 959.5 148.5Q1053 219 1053 354Q1053 462 996.5 520.0Q940 578 758 633L561 692Q347 757 259.5 854.0Q172 951 172 1120Q172 1310 307.0 1415.0Q442 1520 686 1520Q790 1520 914.0 1497.5Q1038 1475 1178 1432V1114H1065Q1048 1272 959.5 1342.5Q871 1413 690 1413Q532 1413 449.5 1348.5Q367 1284 367 1161Q367 1054 429.0 993.0Q491 932 692 872L877 817Q1080 756 1166.5 661.5Q1253 567 1253 408Q1253 191 1114.0 81.0Q975 -29 700 -29Q577 -29 449.5 -4.0Q322 21 190 72Z" transform="translate(107.888315 410.971595) scale(0.20787605 -0.20787605)" fill="#fffaf5"/>
+</svg>
